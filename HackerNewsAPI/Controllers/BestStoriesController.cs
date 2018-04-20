@@ -26,23 +26,24 @@ namespace HackerNewsAPI.Controllers
         }
 
         /// <summary>
-        /// Get's the IDs of the best stories from Hacker News API
+        /// Gets the list of story IDs from the HackerNews API
         /// </summary>
         /// <returns></returns>
-        public async Task<List<int>> getBestStoryIDs()
+        [HttpGet]
+        public async Task<List<BestStoriesModel>> Get()
         {
             // Setup variables
             string respString;
             List<int> stories;
+            List<BestStoriesModel> bestStories;
 
             // Setup cache expiration
             var cacheOptions = new MemoryCacheEntryOptions().SetSlidingExpiration(TimeSpan.FromMinutes(cacheExpirationMin));
 
-            // Attempt to get the cached object for storyIDs, else get the best story IDs and store in cache
-            if (!_cache.TryGetValue("storyIDs", out stories))
+            // Now check if we have cached best stories, else pull them from the HackerNewsAPI
+            if (!_cache.TryGetValue("bestStories", out bestStories))
             {
-                // Get the IDs from the Hacker News API
-                // Now get the IDs from the API
+                // First get the story IDs
                 using (HttpClient httpClient = new HttpClient())
                 {
                     // Await the response from the cient API
@@ -52,44 +53,6 @@ namespace HackerNewsAPI.Controllers
                     {
                         respString = await response.Content.ReadAsStringAsync();
                         stories = JsonConvert.DeserializeObject<List<int>>(respString);
-
-                        // Cache the data
-                        _cache.Set("storyIDs", stories, cacheOptions);
-                    }
-                }
-            }
-            return stories;
-        }
-
-        /// <summary>
-        /// Get's the story details from the list of story IDs
-        /// </summary>
-        /// <param name="stories"></param>
-        /// <returns></returns>
-        public async Task<List<BestStoriesModel>> getBestStories(List<int> stories)
-        {
-            // Setup variables
-            List<BestStoriesModel> bestStories;
-
-            // Setup our best stories list object
-            bestStories = new List<BestStoriesModel>();
-
-            // Loop through our story IDs and generate a list of best stories          
-            using (HttpClient httpClient = new HttpClient())
-            {
-                foreach (var storyID in stories)
-                {
-                    // Await the response from the cient API
-                    HttpResponseMessage response = await httpClient.GetAsync(HNStoryDetailsURL + storyID + ".json");
-
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var respData = await response.Content.ReadAsStringAsync();
-                        var story = JsonConvert.DeserializeObject<HNStoryModel>(respData);
-                        var hnstory = new BestStoriesModel();
-                        hnstory.author = story.by;
-                        hnstory.title = story.title;
-                        bestStories.Add(hnstory);
                     }
                     else
                     {
@@ -97,30 +60,47 @@ namespace HackerNewsAPI.Controllers
                         return new List<BestStoriesModel>();
                     }
                 }
+
+                // If we successfully obtained story IDs, we get their author and title, else return empty set
+                if (stories.Count > 0)
+                {
+                    // Setup our best stories list object
+                    bestStories = new List<BestStoriesModel>();
+
+                    // Loop through our story IDs and generate a list of best stories          
+                    using (HttpClient httpClient = new HttpClient())
+                    {
+                        foreach (var storyID in stories)
+                        {
+                            // Await the response from the cient API
+                            HttpResponseMessage response = await httpClient.GetAsync(HNStoryDetailsURL + storyID + ".json");
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var respData = await response.Content.ReadAsStringAsync();
+                                var story = JsonConvert.DeserializeObject<HNStoryModel>(respData);
+                                var hnstory = new BestStoriesModel();
+                                hnstory.author = story.by;
+                                hnstory.title = story.title;
+                                bestStories.Add(hnstory);
+                            }
+                            else
+                            {
+                                // Return an empty value
+                                return new List<BestStoriesModel>();
+                            }
+                        }
+                    }
+                    // Now cache the stories
+                    _cache.Set("bestStories", bestStories, cacheOptions);
+                }
+                else
+                {
+                    // Return an empty value
+                    return new List<BestStoriesModel>();
+                }
             }
             return bestStories;
-        }
-
-        /// <summary>
-        /// Gets the list of story IDs from the HackerNews API
-        /// </summary>
-        /// <returns></returns>
-        [HttpGet]
-        public async Task<List<BestStoriesModel>> Get()
-        {
-            // First get the story IDs
-            var stories = await getBestStoryIDs();
-
-            // Now attempt to get the best story details
-            if (stories.Count > 0)
-            {
-                var bestStories = await getBestStories(stories);
-                return bestStories;
-            }
-            else
-            {
-                return new List<BestStoriesModel>();
-            }
         }
     }
 }
