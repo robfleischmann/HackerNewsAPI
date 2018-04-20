@@ -35,6 +35,10 @@ namespace HackerNewsAPI
                 app.UseDeveloperExceptionPage();
             }
 
+            // Shows UseCors with CorsPolicyBuilder.
+            app.UseCors(builder =>
+               builder.WithOrigins("*").AllowAnyHeader());
+
             app.UseMvc();
         }
     }

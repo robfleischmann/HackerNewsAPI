@@ -30,7 +30,7 @@ namespace HackerNewsAPI.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet]
-        public async Task<List<int>> Get()
+        public async Task<List<BestStoriesModel>> Get()
         {
             // Setup variables
             string respString;
@@ -57,50 +57,45 @@ namespace HackerNewsAPI.Controllers
                     }
                 }
             }
-            return stories;
-        }
 
-        /// <summary>
-        /// Get's the details for the passed in best story IDs
-        /// </summary>
-        /// <param name="storyIDs"></param>
-        /// <returns></returns>
-        [HttpGet]
-        public async Task<List<BestStoriesModel>> Get(List<int> storyIDs)
-        {
-            // No IDs, no results
-            if (storyIDs.Count == 0) { return new List<BestStoriesModel>(); }
-
-            // Setup variables
-            List<BestStoriesModel> bestStories;
-
-            // Attempt to get the cached best stories details, else we build it and store it in cache
-            if (!_cache.TryGetValue("bestStories", out bestStories))
+            // Now attempt to get the best story details
+            if (stories.Count > 0)
             {
-                // Setup our best stories list object
-                bestStories = new List<BestStoriesModel>();
+                // Setup variables
+                List<BestStoriesModel> bestStories;
 
-                // Loop through our story IDs and generate a list of best stories          
-                using (HttpClient httpClient = new HttpClient())
+                // Attempt to get the cached best stories details, else we build it and store it in cache
+                if (!_cache.TryGetValue("bestStories", out bestStories))
                 {
-                    foreach (var storyID in storyIDs)
-                    {
-                        // Await the response from the cient API
-                        HttpResponseMessage response = await httpClient.GetAsync(HNStoryDetailsURL + storyID + ".json");
+                    // Setup our best stories list object
+                    bestStories = new List<BestStoriesModel>();
 
-                        if (response.IsSuccessStatusCode)
+                    // Loop through our story IDs and generate a list of best stories          
+                    using (HttpClient httpClient = new HttpClient())
+                    {
+                        foreach (var storyID in stories)
                         {
-                            var respData = await response.Content.ReadAsStringAsync();
-                            var story = JsonConvert.DeserializeObject<HNStoryModel>(respData);
-                            var hnstory = new BestStoriesModel();
-                            hnstory.author = story.by;
-                            hnstory.title = story.title;
-                            bestStories.Add(hnstory);
+                            // Await the response from the cient API
+                            HttpResponseMessage response = await httpClient.GetAsync(HNStoryDetailsURL + storyID + ".json");
+
+                            if (response.IsSuccessStatusCode)
+                            {
+                                var respData = await response.Content.ReadAsStringAsync();
+                                var story = JsonConvert.DeserializeObject<HNStoryModel>(respData);
+                                var hnstory = new BestStoriesModel();
+                                hnstory.author = story.by;
+                                hnstory.title = story.title;
+                                bestStories.Add(hnstory);
+                            }
                         }
                     }
                 }
+                return bestStories;
             }
-            return bestStories;
+            else
+            {
+                return new List<BestStoriesModel>();
+            }
         }
     }
 }
